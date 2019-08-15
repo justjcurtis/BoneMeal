@@ -1,5 +1,5 @@
 import requests
-import subprocess 
+import subprocess
 from pathlib import Path
 import os
 import numpy as np
@@ -32,9 +32,11 @@ OutputStore = "Output"
 sheetName = os.path.join(DataStore, 'FreeTradeStockUniverse.csv')
 mainStore = os.path.join(DataStore, 'DataStore.csv')
 rejectStore = os.path.join(DataStore, "rejected.csv")
+listStore = os.path.join(DataStore, "listStore.csv")
 StockListURL = 'http://freetrade.io/stock-universe'
 sheetUrl = 'https://docs.google.com/spreadsheets/d/1-5eYQWyWLyRCiqgHpiqjSmCayLjODvDvVEHWRjW5VjM/export?format=csv&id=1-5eYQWyWLyRCiqgHpiqjSmCayLjODvDvVEHWRjW5VjM'
 sheetData = ''
+listData = []
 DividendStockListStored = []
 rejectedStockList = []
 
@@ -55,6 +57,22 @@ class Stock:
         except:
             self.yfData = 0
 
+
+class FilterType:
+    def __init__(self, name, dYield=None, dGrowthRate=None, peRatio=None):
+        self.name = name
+        self.dYield = dYield
+        self.dGrowthRate = dGrowthRate
+        self.peRatio = peRatio
+        self.outputName = name + ".csv"
+
+
+defaultListData = [
+    FilterType("cream", 0.03, 0.04, 25),
+    FilterType("highYield", 0.05, None, None),
+    FilterType("highYieldGrowth", 0.05, 0.04, 25),
+    FilterType("dividendGrowth", 0.024, 0.035, 40)
+]
 
 clear = lambda: subprocess.call('cls||clear', shell=True)
 
@@ -105,6 +123,7 @@ def dividendGrowthRate(stock):
 def init():
     global sheetData
     global DividendStockListStored
+    global rejectedStockList
     clear()
     print("Initialising BoneMeal...")
     if not (Path.exists(Path(DataStore))):
@@ -142,6 +161,7 @@ def init():
     finally:
         print("Got dividend data for stocks!")
         DividendStockListStored = outputSheetToStockList(mainStore)
+        rejectedStockList = outputSheetToStockList(rejectStore)
 
     print("Initialisation complete!")
 
@@ -184,6 +204,7 @@ def dividendStockList(stockList):
     pBar = ProgressBar(widgets=widgets)
     dStockList = []
     print("populating stocks with dividend data..")
+    rejectedStockList = []
     for stock in pBar(stockList):
         data = getYDGPEforStock(stock)
         if(data == 'skip'):
@@ -229,6 +250,19 @@ def indexOfStock(stockList, isin):
 
 
 def filterStocklist(stockList, dYield=0.01, dGrowthRate=0, peRatio=None):
+    try:
+        dYield = float(dYield)
+    except:
+        dYield = None
+    try:
+        dGrowthRate = float(dGrowthRate)
+    except:
+        dGrowthRate = None
+    try:
+        peRatio = float(peRatio)
+    except:
+        peRatio = None
+
     filterList = []
     for stock in stockList:
         try:
@@ -266,23 +300,6 @@ def filterStocklist(stockList, dYield=0.01, dGrowthRate=0, peRatio=None):
 
     return filterList
 
-
-def creamList():
-    return filterStocklist(DividendStockListStored, dYield=0.03, dGrowthRate=0.04, peRatio=25)
-
-
-def highYield():
-    return filterStocklist(DividendStockListStored, dYield=0.05)
-
-
-def highYieldGrowth():
-    return filterStocklist(DividendStockListStored, dYield=0.05, dGrowthRate=0.04, peRatio=25)
-
-
-def dGrowthList():
-    return filterStocklist(DividendStockListStored, dYield=0.024, dGrowthRate=0.035, peRatio=40)
-
-
 def CustomSearch():
     print("Enter custom filter options")
     print("Leave blank to ignore option")
@@ -311,19 +328,294 @@ def fullRefresh():
         pass
 
 
-def stockUpdate():
-    pass
+
+def produceLists(filterList):
+    for f in filterList:
+        out = filterStocklist(DividendStockListStored, dYield=f.dYield, dGrowthRate=f.dGrowthRate, peRatio=f.peRatio)
+        writeOuputCsv(out, f.outputName)
 
 
-def produceLists():
-    writeOuputCsv(creamList(), "cream.csv")
-    writeOuputCsv(highYield(), 'highYield.csv')
-    writeOuputCsv(highYieldGrowth(), 'highYieldGrowth.csv')
-    writeOuputCsv(dGrowthList(), 'dGrowthList.csv')
+def saveListData():
+    global listData
+    csvData = []
+    for f in listData:
+        csvData.append([f.name, f.dYield, f.dGrowthRate, f.peRatio])
+
+    with open(listStore, 'w', newline='') as lsHandle:
+        wr = csv.writer(lsHandle, quoting=csv.QUOTE_ALL)
+        for row in csvData:
+            wr.writerow(row)
+
+
+def addFilter():
+    global listData
+    getting = True
+    while getting:
+        print("please enter a name for the new filter")
+        print("type cancel to cancel")
+        name = input("> ")
+        if(name == "cancel"):
+            return
+        if(len(name)>0):
+            getting = False
+        else:
+            print("you must enter a name for a new filter")
+            input("press enter to re enter name")
+
+
+    getting = True
+    while getting:
+        print("please enter the dividend yield for the new filter")
+        print("leave this blank to ignore this filter")
+        dYield = input("> ")
+        if not (dYield == ""):
+            try:
+                dYield = float(dYield)
+                if(dYield >= 1 or dYield <= 0):
+                    print("dividend yield must be a valid decimal between 0 and 1")
+                    input("press enter to re enter dividend yield")
+                else:
+                    getting = False
+            except:
+                print("dividend yield must be a valid decimal between 0 and 1")
+                input("press enter to re enter dividend yield")
+        else:
+            dYield = None
+            getting = False
+
+    getting = True
+    while getting:
+        print("please enter the dividend growth rate for the new filter")
+        print("leave this blank to ignore this filter")
+        dGrowthRate = input("> ")
+        if not (dGrowthRate == ""):
+            try:
+                dGrowthRate = float(dGrowthRate)
+                if(dGrowthRate >= 1 or dGrowthRate <= 0):
+                    print("dividend growth rate must be a valid decimal between 0 and 1")
+                    input("press enter to re enter dividend growth rate")
+                else:
+                    getting = False
+            except:
+                print("dividend growth rate must be a valid decimal between 0 and 1")
+                input("press enter to re enter dividend growth rate")
+        else:
+            dGrowthRate = None
+            getting = False
+
+    getting = True
+    while getting:
+        print("please enter the PE ratio for the new filter")
+        print("leave this blank to ignore this filter")
+        peRatio = input("> ")
+        if not (peRatio == ""):
+            try:
+                peRatio = float(peRatio)
+                if(peRatio <= 0 or peRatio >= 100):
+                    print("PE ratio must be a valid decimal greater than 0 and less than 100")
+                    input("press enter to re enter PE ratio")
+                else:
+                    getting = False
+            except:
+                print("PE ratio must be a valid decimal greater than 0 and less than 100")
+                input("press enter to re enter PE ratio")
+        else:
+            peRatio = None
+            getting = False
+
+    newFilter = FilterType(name, dYield=dYield, dGrowthRate=dGrowthRate, peRatio=peRatio)
+    listData.append(newFilter)
+    saveListData()
+
+def editFilter():
+    global listData
+    getting = True
+    while getting:
+        print("please enter the name of the filter you want to edit")
+        print("leave blank to cancel")
+        name = input("> ")
+        i = 0
+        if(len(name)>0):
+            for f in listData:
+                if(name == f.name):
+                    break
+                else:
+                    i += 1
+            if(name == listData[i].name):
+                gettingg = True
+                while gettingg:
+                    print("please enter a new name for " + name)
+                    newName = input("> ")
+                    if(len(newName)>0):
+                        getting = False
+                    else:
+                        print("you must enter a new name for " + name)
+                        input("press enter to re enter name")
+
+                gettingg = True
+                while gettingg:
+                    print("please enter a new dividend yield for " + newName)
+                    print("leave this blank to ignore this filter")
+                    dYield = input("> ")
+                    if not (dYield == ""):
+                        try:
+                            dYield = float(dYield)
+                            if(dYield >= 1 or dYield <= 0):
+                                print("dividend yield must be a valid decimal between 0 and 1")
+                                input("press enter to re enter dividend yield")
+                            else:
+                                gettingg = False
+                        except:
+                            print("dividend yield must be a valid decimal between 0 and 1")
+                            input("press enter to re enter dividend yield")
+                    else:
+                        dYield = None
+                        gettingg = False
+
+                gettingg = True
+                while gettingg:
+                    print("please enter a dividend growth rate for " + newName)
+                    print("leave this blank to ignore this filter")
+                    dGrowthRate = input("> ")
+                    if not (dGrowthRate == ""):
+                        try:
+                            dGrowthRate = float(dGrowthRate)
+                            if(dGrowthRate >= 1 or dGrowthRate <= 0):
+                                print("dividend growth rate must be a valid decimal between 0 and 1")
+                                input("press enter to re enter dividend growth rate")
+                            else:
+                                gettingg = False
+                        except:
+                            print("dividend growth rate must be a valid decimal between 0 and 1")
+                            input("press enter to re enter dividend growth rate")
+                    else:
+                        dGrowthRate = None
+                        gettingg = False
+
+                gettingg = True
+                while gettingg:
+                    print("please enter a new PE ratio for " + newName)
+                    print("leave this blank to ignore this filter")
+                    peRatio = input("> ")
+                    if not (peRatio == ""):
+                        try:
+                            peRatio = float(peRatio)
+                            if(peRatio <= 0 or peRatio >= 100):
+                                print("PE ratio must be a valid decimal greater than 0 and less than 100")
+                                input("press enter to re enter PE ratio")
+                            else:
+                                gettingg = False
+                        except:
+                            print("PE ratio must be a valid decimal greater than 0 and less than 100")
+                            input("press enter to re enter PE ratio")
+                    else:
+                        peRatio = None
+                        gettingg = False
+                listData[i].name = newName
+                listData[i].dYield = dYield
+                listData[i].dGrowthRate = dGrowthRate
+                listData[i].peRatio = peRatio
+                getting = False
+            else:
+                print("you must enter a name of a filter to edit")
+                input("press enter to re enter name")
+        else:
+            return
+    saveListData()
+
+
+def removeFilter():
+    global listData
+    getting = True
+    while getting:
+        print("please enter the name of the filter you want to edit")
+        print("leave blank to cancel")
+        name = input("> ")
+        i = 0
+        if(len(name)>0):
+            for f in listData:
+                if(name == f.name):
+                    break
+                else:
+                    i += 1
+            if(name == listData[i].name):
+                del listData[i]
+                getting = False
+            else:
+                print("you must enter a name of a filter to remove")
+                input("press enter to re enter name")
+        else:
+            return
+    saveListData()
+
+
+def clearFilters():
+    global listData
+    listData = []
+    saveListData()
+
+
+def loadFilterList():
+    global listData
+    listData = []
+    with open(listStore, 'r') as ls:
+        reader = csv.reader(ls)
+        filterList = list(reader)
+        for row in filterList:
+            listData.append(FilterType(row[0], row[1], row[2], row[3]))
+    return listData
 
 
 def editLists():
-    pass
+    table = [
+        ["Select option below"],
+        ["s - Show list of custom filters"],
+        ["a - Add a new filter to the list"],
+        ["e - Edit a filter in the list"],
+        ["r - Remove a filter from the list"],
+        ["clear - Clear entire filter list"],
+        ["x - Exit"]
+        ]
+    getting = True
+    while getting:
+        loadFilterList()
+        clear()
+        print(tabulate(table, headers="firstrow", tablefmt="rst"))
+        command = input("> ")
+        try:
+            command = str.lower(command)
+            if(command == "x"):
+                clear()
+                return
+            elif(command == "s"):
+                filterList = [
+                    ["Name", "Yield", "Growth Rate", "PE Ratio"]
+                ]
+                for f in listData:
+                    filterList.append([f.name, f.dYield, f.dGrowthRate, f.peRatio])
+
+                print(tabulate(filterList, headers="firstrow", tablefmt="rst"))
+                input("press enter to reload menu")
+                clear()
+                continue
+            elif(command == "a"):
+                addFilter()
+            elif(command == "e"):
+                editFilter()
+            elif(command == "r"):
+                removeFilter()
+            elif(command == "clear"):
+                clearFilters()
+            else:
+                print("please enter a valid command.")
+                input("press enter to reload menu")
+                clear()
+                continue
+        except:
+            print("please enter a valid command.")
+            input("press enter to reload menu")
+            clear()
+            continue
 
 
 def Menu():
@@ -331,25 +623,30 @@ def Menu():
     ["Select option below"],
     ["1 - Refresh data"],
     ["2 - Produce Lists"],
-    ["3 - Edit Lists"],
-    ["4 - Custom Search"]]
+    ["3 - Produce Default Lists"],
+    ["4 - Edit Lists"],
+    ["5 - Custom Search"],
+    ["x - Exit"]]
     getting = True
     while getting:
         clear()
         print(tabulate(table, headers="firstrow", tablefmt="rst"))
         command = input("> ")
         try:
+            if(str.lower(command) == "x"):
+                return
             command = int(command)
-            if(command > 0 and command < 5):
+            if(command > 0 and command < 6):
                 if(command == 1):
                     fullRefresh()
                 if(command == 2):
-                    produceLists()
+                    loadFilterList()
+                    produceLists(listData)
                 if(command == 3):
-                    editLists()
-                    print("Not available yet, coming soon!")
-                    input("press enter to reload menu")
+                    produceLists(defaultListData)
                 if(command == 4):
+                    editLists()
+                if(command == 5):
                     try:
                         CustomSearch()
                     except Exception as ex:
