@@ -27,9 +27,11 @@ except:
     pip(['install', '--user', 'progressbar'])
 finally:
     from progressbar import ProgressBar, AdaptiveETA, Bar, Percentage
-
-sheetName = 'FreeTradeStockUniverse.csv'
-mainStore = 'DataStore.csv'
+DataStore = "DataStore"
+OutputStore = "Output"
+sheetName = os.path.join(DataStore, 'FreeTradeStockUniverse.csv')
+mainStore = os.path.join(DataStore, 'DataStore.csv')
+rejectStore = os.path.join(DataStore, "rejected.csv")
 StockListURL = 'http://freetrade.io/stock-universe'
 sheetUrl = 'https://docs.google.com/spreadsheets/d/1-5eYQWyWLyRCiqgHpiqjSmCayLjODvDvVEHWRjW5VjM/export?format=csv&id=1-5eYQWyWLyRCiqgHpiqjSmCayLjODvDvVEHWRjW5VjM'
 sheetData = ''
@@ -105,6 +107,10 @@ def init():
     global DividendStockListStored
     clear()
     print("Initialising BoneMeal...")
+    if not (Path.exists(Path(DataStore))):
+        os.mkdir(DataStore)
+    if not (Path.exists(Path(OutputStore))):
+        os.mkdir(OutputStore)
     try:
         _ = open(sheetName, 'r')
     except:
@@ -122,7 +128,12 @@ def init():
 
     try:
         _ = open(mainStore, 'r')
+        _ = open(rejectStore, "r")
     except:
+        if(Path.exists(Path(mainStore))):
+            os.remove(mainStore)
+        if(Path.exists(Path(rejectStore))):
+            os.remove(rejectStore)
         print("Dividend data for stocks not found")
         print("getting it...")
         stockList = sheetToStockList(sheetName)
@@ -131,7 +142,7 @@ def init():
     finally:
         print("Got dividend data for stocks!")
         DividendStockListStored = outputSheetToStockList(mainStore)
-    
+
     print("Initialisation complete!")
 
 
@@ -183,7 +194,7 @@ def dividendStockList(stockList):
             stock.peRatio = data['peRatio']
             stock.ticker = data['ticker']
             dStockList.append(stock)
-    writeOuputCsv(rejectedStockList, 'rejected.csv')
+    writeOuputCsv(rejectedStockList, rejectStore)
     return dStockList
 
 
@@ -202,7 +213,7 @@ def stockListToCsvList(stockList):
 
 def writeOuputCsv(stockList, filename):
     csvList = stockListToCsvList(stockList)
-    with open(filename, 'w', newline='') as myfile:
+    with open(os.path.join(OutputStore, filename), 'w', newline='') as myfile:
         wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
         for row in csvList:
             wr.writerow(row)
