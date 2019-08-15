@@ -1,15 +1,32 @@
 import requests
+import subprocess 
 from pathlib import Path
+import os
 import numpy as np
 import csv
 import time
 from pip._internal import main as pip
+
 try:
     import yfinance as yf
 except:
     pip(['install', '--user', 'yfinance'])
 finally:
     import yfinance as yf
+
+try:
+    from tabulate import tabulate
+except:
+    pip(['install', '--user', 'tabulate'])
+finally:
+    from tabulate import tabulate
+
+try:
+    from progressbar import ProgressBar
+except:
+    pip(['install', '--user', 'progressbar'])
+finally:
+    from progressbar import ProgressBar, AdaptiveETA, Bar, Percentage
 
 sheetName = 'FreeTradeStockUniverse.csv'
 mainStore = 'DataStore.csv'
@@ -36,6 +53,8 @@ class Stock:
         except:
             self.yfData = 0
 
+
+clear = lambda: subprocess.call('cls||clear', shell=True)
 
 def getSheet():
     response = requests.get(sheetUrl)
@@ -75,6 +94,8 @@ def outputSheetToStockList(fileName):
 
 def dividendGrowthRate(stock):
     divs = stock.yfData.dividends.values
+    if(len(divs) < 2):
+        raise Exception('no dividends')
     growth_rate = np.mean(np.exp(np.diff(np.log(divs))) - 1)
     return growth_rate
 
@@ -82,12 +103,19 @@ def dividendGrowthRate(stock):
 def init():
     global sheetData
     global DividendStockListStored
+    clear()
+    print("Initialising BoneMeal...")
     try:
         _ = open(sheetName, 'r')
     except:
+        print("FreeTrade Stock Uninverse not found")
+        print("getting it...")
         sheet = getSheet()
         saveCsv(sheet, sheetName)
+        if(Path.exists(Path(mainStore))):
+            os.remove(mainStore)
     finally:
+        print("Got FreeTrade Stock Universe!")
         sheetHandle = open(sheetName, 'r')
         sheetData = sheetHandle.read()
         sheetHandle.close()
@@ -95,11 +123,16 @@ def init():
     try:
         _ = open(mainStore, 'r')
     except:
+        print("Dividend data for stocks not found")
+        print("getting it...")
         stockList = sheetToStockList(sheetName)
         dStockList = dividendStockList(stockList)
         writeOuputCsv(dStockList, mainStore)
     finally:
+        print("Got dividend data for stocks!")
         DividendStockListStored = outputSheetToStockList(mainStore)
+    
+    print("Initialisation complete!")
 
 
 def getYDGPEforStock(stock):
@@ -134,11 +167,13 @@ def getYDGPEforStock(stock):
 
 
 def dividendStockList(stockList):
+    widgets = [Percentage(),
+                ' ', Bar(),
+                ' ', AdaptiveETA()]
+    pBar = ProgressBar(widgets=widgets)
     dStockList = []
-    i = 0
-    for stock in stockList:
-        print(str(round((i/len(stockList))*100, 2)) + "% Complete")
-        i += 1
+    print("populating stocks with dividend data..")
+    for stock in pBar(stockList):
         data = getYDGPEforStock(stock)
         if(data == 'skip'):
             rejectedStockList.append(stock)
@@ -149,7 +184,6 @@ def dividendStockList(stockList):
             stock.ticker = data['ticker']
             dStockList.append(stock)
     writeOuputCsv(rejectedStockList, 'rejected.csv')
-    print("100% Complete")
     return dStockList
 
 
@@ -247,7 +281,7 @@ def CustomSearch():
     dGrowthRate = input("Dividend Growth Rate >= : ")
     if(dGrowthRate == ""):
         dGrowthRate = None
-    peRatio = input("PE Ratio >= : ")
+    peRatio = input("PE Ratio <= : ")
     if(peRatio == ""):
         peRatio = None
     name = input("Name for output file : ")
@@ -255,20 +289,77 @@ def CustomSearch():
         name = round(time.time())
     name = str(name)+".csv"
     writeOuputCsv(filterStocklist(DividendStockListStored, dYield=dYield, dGrowthRate=dGrowthRate, peRatio=peRatio), name)
-    
 
-def main():
-    init()
+
+def fullRefresh():
+    if(Path.exists(Path(sheetName))):
+        os.remove(sheetName)
+    try:
+        init()
+    except:
+        pass
+
+
+def stockUpdate():
+    pass
+
+
+def produceLists():
     writeOuputCsv(creamList(), "cream.csv")
     writeOuputCsv(highYield(), 'highYield.csv')
     writeOuputCsv(highYieldGrowth(), 'highYieldGrowth.csv')
     writeOuputCsv(dGrowthList(), 'dGrowthList.csv')
 
-    while True:
+
+def editLists():
+    pass
+
+
+def Menu():
+    table = [
+    ["Select option below"],
+    ["1 - Refresh data"],
+    ["2 - Produce Lists"],
+    ["3 - Edit Lists"],
+    ["4 - Custom Search"]]
+    getting = True
+    while getting:
+        clear()
+        print(tabulate(table, headers="firstrow", tablefmt="rst"))
+        command = input("> ")
         try:
-            CustomSearch()
-        except Exception as ex:
-            print(ex)
+            command = int(command)
+            if(command > 0 and command < 5):
+                if(command == 1):
+                    fullRefresh()
+                if(command == 2):
+                    produceLists()
+                if(command == 3):
+                    editLists()
+                    print("Not available yet, coming soon!")
+                    input("press enter to reload menu")
+                if(command == 4):
+                    try:
+                        CustomSearch()
+                    except Exception as ex:
+                        print(ex)
+                clear()
+                continue
+            else:
+                print("please enter a valid command.")
+                input("press enter to reload menu")
+                clear()
+                continue
+        except:
+            print("please enter a valid command.")
+            input("press enter to reload menu")
+            clear()
+            continue
+
+
+def main():
+    init()
+    Menu()
 
 
 main()
