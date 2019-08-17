@@ -131,7 +131,20 @@ def init():
     if not (Path.exists(Path(OutputStore))):
         os.mkdir(OutputStore)
     try:
-        _ = open(sheetName, 'r')
+        with open(sheetName, 'r') as sheetCurrentHandle:
+            print("Checking for updates to Freetrade Stock Universe...")
+            try:
+                sheetCurrent = sheetCurrentHandle.read().replace('\r\n', '\n')
+                sheet = getSheet().replace('\r\n', '\n')
+                if not (sheetCurrent == sheet):
+                    print("Update found!")
+                    print("Applying update..")
+                    saveCsv(sheet, sheetName)
+                    if(Path.exists(Path(mainStore))):
+                        os.remove(mainStore)
+                    print("Update applied!")
+            except:
+                print("Couldn't get new sheet, skipping update")
     except:
         print("FreeTrade Stock Uninverse not found")
         print("getting it...")
@@ -144,6 +157,7 @@ def init():
         sheetHandle = open(sheetName, 'r')
         sheetData = sheetHandle.read()
         sheetHandle.close()
+
 
     try:
         _ = open(mainStore, 'r')

@@ -3,6 +3,9 @@
 *BoneMeal is a python 3 script which pulls the latest stock list from http://freetrade.io/stock-universe, grabs all associated dividend data from Yahoo Finance and then allows the user to produce default and custom csv files containing stocks based of filters relating to dividend yeild, average dividend growth rate and PE ratio.*
 ***
 ## ChangeLog
+### **Version 1.2**
+#### Auto-Update DataStore
+ - BoneMeal will check for updates to the freetrade stock universe when opened and, if neccessary, will refresh the dividend data for all stocks following any changes in the stock universe
 ### **Version 1.1**
 #### Major Bugfixes
  - Fixed crash during initialisation which prevented datastore files being created
