@@ -115,7 +115,7 @@ def outputSheetToStockList(fileName):
 def dividendGrowthRate(stock):
     divs = stock.yfData.dividends.values
     if(len(divs) < 2):
-        raise Exception('no dividends')
+        return 'skip'
     growth_rate = np.mean(np.exp(np.diff(np.log(divs))) - 1)
     return growth_rate
 
@@ -156,8 +156,7 @@ def init():
         print("Dividend data for stocks not found")
         print("getting it...")
         stockList = sheetToStockList(sheetName)
-        dStockList = dividendStockList(stockList)
-        writeOuputCsv(dStockList, mainStore)
+        dividendStockList(stockList)
     finally:
         print("Got dividend data for stocks!")
         DividendStockListStored = outputSheetToStockList(mainStore)
@@ -186,6 +185,8 @@ def getYDGPEforStock(stock):
 
     try:
         dGrowthRate = dividendGrowthRate(stock)
+        if(dGrowthRate == 'skip'):
+            return 'skip'
     except:
         return 'skip'
 
@@ -215,7 +216,8 @@ def dividendStockList(stockList):
             stock.peRatio = data['peRatio']
             stock.ticker = data['ticker']
             dStockList.append(stock)
-    writeOuputCsv(rejectedStockList, rejectStore)
+    writeOuputCsv(dStockList, mainStore, isDataStore=True)
+    writeOuputCsv(rejectedStockList, rejectStore, isDataStore=True)
     return dStockList
 
 
@@ -232,9 +234,13 @@ def stockListToCsvList(stockList):
     return csvList
 
 
-def writeOuputCsv(stockList, filename):
+def writeOuputCsv(stockList, filename, isDataStore=False):
     csvList = stockListToCsvList(stockList)
-    with open(os.path.join(OutputStore, filename), 'w', newline='') as myfile:
+    if(isDataStore):
+        outPath = filename
+    else:
+        outPath = os.path.join(OutputStore, filename)
+    with open(outPath, 'w', newline='') as myfile:
         wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
         for row in csvList:
             wr.writerow(row)
@@ -447,7 +453,7 @@ def editFilter():
                     print("please enter a new name for " + name)
                     newName = input("> ")
                     if(len(newName)>0):
-                        getting = False
+                        gettingg = False
                     else:
                         print("you must enter a new name for " + name)
                         input("press enter to re enter name")
@@ -558,6 +564,9 @@ def clearFilters():
 def loadFilterList():
     global listData
     listData = []
+    if not (Path.exists(Path(listStore))):
+        f = open(listStore, 'w')
+        f.close()
     with open(listStore, 'r') as ls:
         reader = csv.reader(ls)
         filterList = list(reader)
